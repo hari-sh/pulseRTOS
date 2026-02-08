@@ -4,6 +4,15 @@
 #define MAX_TASKS 3
 #define STACK_SIZE 1024
 
+
+typedef struct {
+    unsigned char *base;
+    unsigned int size;
+    unsigned int high_water_mark;
+} stack_t;
+
+
+
 void init_task(int id, void (*fn)(void));
 void schedule(void);
 void setTaskInit(void);

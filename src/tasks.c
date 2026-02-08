@@ -4,7 +4,8 @@
 #include "timer.h"
 
 // ALIGNED STACKS to avoid 'T'-only trap loops
-unsigned char stacks[MAX_TASKS][STACK_SIZE] __attribute__((aligned(16)));
+stack_t task_stacks[MAX_TASKS];
+unsigned char stacks[MAX_TASKS][STACK_SIZE];
 struct context tasks[MAX_TASKS];
 
 int current_task = -1;
@@ -24,6 +25,10 @@ void task_entry(void (*fn)(void))
 
 void init_task(int id, void (*fn)(void))
 {
+    task_stacks[id].base = stacks[id];
+    task_stacks[id].size = STACK_SIZE;
+    task_stacks[id].high_water_mark = STACK_SIZE;
+
     // Point ra to task_entry wrapper
     tasks[id].ra = (unsigned int)task_entry;
     
