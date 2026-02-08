@@ -9,10 +9,7 @@
 /* 10MHz assumed clock */
 #define TIMER_INTERVAL 10000000
 
-
-
 void timer_init(void);
 void timer_handler(void);
-void delay(void);
 
 #endif
