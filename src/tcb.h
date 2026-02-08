@@ -3,6 +3,15 @@
 
 #include "context.h"
 
+/*
+ * TCB ownership rules:
+ * - Allocated only by init_task()
+ * - Freed only by task_delete()
+ * - Scheduler never frees TCBs
+ */
+
+#define TCB_MAGIC 0x54434231  // "TCB1"
+
 typedef enum {
     TASK_READY,
     TASK_RUNNING,
@@ -11,6 +20,7 @@ typedef enum {
 } task_state_t;
 
 typedef struct tcb {
+    unsigned int magic;
     struct context ctx;
 
     unsigned int id;

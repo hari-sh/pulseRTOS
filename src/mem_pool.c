@@ -7,6 +7,8 @@ void mem_pool_init(mem_pool_t *pool,
 {
     pool->block_size = block_size;
     pool->total_blocks = block_count;
+    pool->free_blocks = block_count;
+    pool->min_free_blocks = block_count;
     pool->pool_start = memory;
     pool->free_list = 0;
 
@@ -18,6 +20,7 @@ void mem_pool_init(mem_pool_t *pool,
     }
 }
 
+
 void *mem_alloc(mem_pool_t *pool)
 {
     if (!pool->free_list)
@@ -25,12 +28,21 @@ void *mem_alloc(mem_pool_t *pool)
 
     mem_block_t *blk = pool->free_list;
     pool->free_list = blk->next;
+
+    pool->free_blocks--;
+    if (pool->free_blocks < pool->min_free_blocks)
+        pool->min_free_blocks = pool->free_blocks;
+
     return (void *)blk;
 }
+
 
 void mem_free(mem_pool_t *pool, void *ptr)
 {
     mem_block_t *blk = (mem_block_t *)ptr;
     blk->next = pool->free_list;
     pool->free_list = blk;
+
+    pool->free_blocks++;
 }
+

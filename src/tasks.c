@@ -5,6 +5,7 @@
 #include "tcb.h"
 #include "mem_pool.h"
 #include "stack.h"
+#include "panic.h"
 
 extern mem_pool_t tcb_pool;
 
@@ -31,11 +32,11 @@ void task_entry(void (*fn)(void))
 
 void init_task(int id, void (*fn)(void))
 {
-    tcb_t *t = (tcb_t *)mem_alloc(&tcb_pool);
+    tcb_t *t = mem_alloc(&tcb_pool);
     if (!t)
-        return;
+        kernel_panic("TCB allocation failed");
 
-        // Align stack base
+    // Align stack base
     unsigned char *stack = stacks[id];
 
     // Fill entire stack with pattern
@@ -48,6 +49,7 @@ void init_task(int id, void (*fn)(void))
 
     t->id = id;
     t->state = TASK_READY;
+    t->magic = TCB_MAGIC;
 
     // Init TCB stack info
     t->stack_base = stack;
@@ -84,6 +86,23 @@ void schedule(void)
         context_switch(&task_list[prev]->ctx, &task_list[current_task]->ctx);
     }
 }
+
+void task_delete(tcb_t *t)
+{
+    if (!t)
+        return;
+
+    if (t->magic != TCB_MAGIC)
+        kernel_panic("TCB corruption or double free");
+
+    t->magic = 0;
+
+    t->state = TASK_SUSPENDED;
+
+    // Free TCB back to pool
+    mem_free(&tcb_pool, t);
+}
+
 
 void taskA(void) {
     while(1);

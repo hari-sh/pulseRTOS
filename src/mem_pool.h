@@ -8,9 +8,14 @@ typedef struct mem_block {
 typedef struct {
     unsigned int block_size;
     unsigned int total_blocks;
+
+    unsigned int free_blocks;
+    unsigned int min_free_blocks;   // lowest ever observed
+
     mem_block_t *free_list;
     unsigned char *pool_start;
 } mem_pool_t;
+
 
 void mem_pool_init(mem_pool_t *pool,
                    unsigned char *memory,
