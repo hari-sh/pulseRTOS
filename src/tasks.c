@@ -5,10 +5,11 @@
 
 // ALIGNED STACKS to avoid 'T'-only trap loops
 unsigned char stacks[MAX_TASKS][STACK_SIZE] __attribute__((aligned(16)));
-struct tcb tasks[MAX_TASKS];
+struct context tasks[MAX_TASKS];
 
 int current_task = -1;
 int num_active_tasks = MAX_TASKS;
+int are_tasks_initialized = 0;
 
 void task_entry(void (*fn)(void))
 {
@@ -23,80 +24,63 @@ void task_entry(void (*fn)(void))
 
 void init_task(int id, void (*fn)(void))
 {
-    struct tcb *t = &tasks[id];
-
-    t->state = TASK_READY;
-
-    if (id == 0) t->priority = 1;   // Task A
-    if (id == 1) t->priority = 0;   // Task B (highest)
-    if (id == 2) t->priority = 2;   // Task C
-
-    t->ctx.ra   = (unsigned int)task_entry;
-    t->ctx.sp   = (unsigned int)(stacks[id] + STACK_SIZE);
-    t->ctx.a0   = (unsigned int)fn;
-    t->ctx.mepc = (unsigned int)task_entry;
+    // Point ra to task_entry wrapper
+    tasks[id].ra = (unsigned int)task_entry;
+    
+    // sp points to top of stack
+    tasks[id].sp = (unsigned int)(stacks[id] + STACK_SIZE);
+    
+    // a0 gets the function pointer (argument to task_entry)
+    tasks[id].a0 = (unsigned int)fn;
+    
+    // mepc also points to entry (used by mret if we strictly used mret, 
+    // but context_switch uses ret. However, if we switch TO it via interrupt 
+    // path, we might rely on proper mepc. 
+    // actually our context_switch uses ret, so ra is used.
+    // mepc is only used if we switch via mret which we don't do directly in context_switch.)
+    // Wait, context_switch loads t0 from mepc slot and writes to mepc CSR.
+    // But it returns via `ret` (using ra).
+    // The trap handler does `mret`.
+    // If context_switch is called from trap_handler:
+    //   It returns to trap_handler.
+    //   trap_handler does mret using CURRENT mepc CSR.
+    //   So context_switch MUST restore mepc CSR.
+    // Correct.
+    tasks[id].mepc = (unsigned int)task_entry;
 }
 
 void schedule(void)
 {
     int prev = current_task;
-    int best = -1;
-
-    /* Find highest-priority runnable task */
-    for (int i = 0; i < MAX_TASKS; i++) {
-        if (tasks[i].state == TASK_BLOCKED)
-            continue;
-
-        if (best == -1 ||
-            tasks[i].priority < tasks[best].priority) {
-            best = i;
-        }
+    current_task++;
+    if (current_task >= MAX_TASKS)  {
+        current_task = 0;
     }
-
-    if (best == -1)
-        return;
-
-    if (best == current_task)
-        return;
-
-    if (prev >= 0) {
-        tasks[prev].state = TASK_READY;
-        tasks[best].state = TASK_RUNNING;
-        current_task = best;
-
-        context_switch(&tasks[prev].ctx,
-                       &tasks[best].ctx);
+    uart_puts_2_int("%d -> %d\n", prev, current_task);
+    if (prev == -1) {
+        struct context dummy;
+        context_switch(&dummy, &tasks[0]);  
+    } else {
+        context_switch(&tasks[prev], &tasks[current_task]);
     }
 }
-
-
-void start_scheduler(void)
-{
-    current_task = 0;
-    tasks[0].state = TASK_RUNNING;
-
-    struct context dummy;
-    context_switch(&dummy, &tasks[0].ctx);
-}
-
 
 void taskA(void) {
-    while(1) {
-        uart_putc('A');
-        for (volatile int i = 0; i < 50000000; i++); 
-    }
+    while(1);
 }
 
 void taskB(void) {
-    while(1) {
-        uart_putc('B');
-        for (volatile int i = 0; i < 50000000; i++);
-    }
+    while(1);
 }
 
 void taskC(void) {
-    while(1) {
-        uart_putc('C');
-        for (volatile int i = 0; i < 50000000; i++);
-    }
+    while(1);
+}
+
+void setTaskInit()  {
+    are_tasks_initialized = 1;
+}
+
+int getTaskInit()  {
+    return are_tasks_initialized;
 }
