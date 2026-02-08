@@ -2,13 +2,18 @@
 #include "context.h"
 #include "uart.h"
 #include "timer.h"
+#include "tcb.h"
+#include "mem_pool.h"
+
+extern mem_pool_t tcb_pool;
 
 // ALIGNED STACKS to avoid 'T'-only trap loops
 stack_t task_stacks[MAX_TASKS];
 unsigned char stacks[MAX_TASKS][STACK_SIZE];
-struct context tasks[MAX_TASKS];
+static tcb_t *task_list[MAX_TASKS];
+static int current_task = -1;
+static int task_count = 0;
 
-int current_task = -1;
 int num_active_tasks = MAX_TASKS;
 int are_tasks_initialized = 0;
 
@@ -25,48 +30,40 @@ void task_entry(void (*fn)(void))
 
 void init_task(int id, void (*fn)(void))
 {
-    task_stacks[id].base = stacks[id];
-    task_stacks[id].size = STACK_SIZE;
-    task_stacks[id].high_water_mark = STACK_SIZE;
+    tcb_t *t = (tcb_t *)mem_alloc(&tcb_pool);
+    if (!t)
+        return;
 
-    // Point ra to task_entry wrapper
-    tasks[id].ra = (unsigned int)task_entry;
-    
-    // sp points to top of stack
-    tasks[id].sp = (unsigned int)(stacks[id] + STACK_SIZE);
-    
-    // a0 gets the function pointer (argument to task_entry)
-    tasks[id].a0 = (unsigned int)fn;
-    
-    // mepc also points to entry (used by mret if we strictly used mret, 
-    // but context_switch uses ret. However, if we switch TO it via interrupt 
-    // path, we might rely on proper mepc. 
-    // actually our context_switch uses ret, so ra is used.
-    // mepc is only used if we switch via mret which we don't do directly in context_switch.)
-    // Wait, context_switch loads t0 from mepc slot and writes to mepc CSR.
-    // But it returns via `ret` (using ra).
-    // The trap handler does `mret`.
-    // If context_switch is called from trap_handler:
-    //   It returns to trap_handler.
-    //   trap_handler does mret using CURRENT mepc CSR.
-    //   So context_switch MUST restore mepc CSR.
-    // Correct.
-    tasks[id].mepc = (unsigned int)task_entry;
+    t->id = id;
+    t->state = TASK_READY;
+
+    t->stack_base = stacks[id];
+    t->stack_size = STACK_SIZE;
+
+    t->ctx.ra = (unsigned int)task_entry;
+    t->ctx.sp = (unsigned int)(stacks[id] + STACK_SIZE);
+    t->ctx.a0 = (unsigned int)fn;
+    t->ctx.mepc = (unsigned int)task_entry;
+
+    task_list[id] = t;
+    task_count++;
 }
 
 void schedule(void)
 {
     int prev = current_task;
     current_task++;
-    if (current_task >= MAX_TASKS)  {
+
+    if (current_task >= task_count)
         current_task = 0;
-    }
+
     uart_puts_2_int("%d -> %d\n", prev, current_task);
+
     if (prev == -1) {
         struct context dummy;
-        context_switch(&dummy, &tasks[0]);  
+        context_switch(&dummy, &task_list[0]->ctx);
     } else {
-        context_switch(&tasks[prev], &tasks[current_task]);
+        context_switch(&task_list[prev]->ctx, &task_list[current_task]->ctx);
     }
 }
 
