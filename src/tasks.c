@@ -4,6 +4,7 @@
 #include "timer.h"
 #include "tcb.h"
 #include "mem_pool.h"
+#include "stack.h"
 
 extern mem_pool_t tcb_pool;
 
@@ -34,14 +35,29 @@ void init_task(int id, void (*fn)(void))
     if (!t)
         return;
 
+        // Align stack base
+    unsigned char *stack = stacks[id];
+
+    // Fill entire stack with pattern
+    for (unsigned int i = 0; i < STACK_SIZE; i++) {
+        stack[i] = STACK_PATTERN;
+    }
+
+    // Place guard word at bottom of stack
+    *(unsigned int *)stack = STACK_GUARD;
+
     t->id = id;
     t->state = TASK_READY;
 
-    t->stack_base = stacks[id];
+    // Init TCB stack info
+    t->stack_base = stack;
     t->stack_size = STACK_SIZE;
+    t->stack_high_water = 0;
 
     t->ctx.ra = (unsigned int)task_entry;
-    t->ctx.sp = (unsigned int)(stacks[id] + STACK_SIZE);
+    
+    // Set initial SP (top of stack, aligned)
+    t->ctx.sp = (unsigned int)(stack + STACK_SIZE);
     t->ctx.a0 = (unsigned int)fn;
     t->ctx.mepc = (unsigned int)task_entry;
 
@@ -63,6 +79,8 @@ void schedule(void)
         struct context dummy;
         context_switch(&dummy, &task_list[0]->ctx);
     } else {
+        check_stack_overflow(task_list[prev]);
+        update_stack_high_water(task_list[prev]);
         context_switch(&task_list[prev]->ctx, &task_list[current_task]->ctx);
     }
 }

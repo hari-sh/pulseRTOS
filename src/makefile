@@ -8,7 +8,7 @@ LDFLAGS = -T linker.ld
 BUILD_DIR = build
 OBJS = $(BUILD_DIR)/start.o $(BUILD_DIR)/main.o $(BUILD_DIR)/uart.o $(BUILD_DIR)/trap.o \
        $(BUILD_DIR)/context.o $(BUILD_DIR)/timer.o $(BUILD_DIR)/tasks.o $(BUILD_DIR)/kernel_memory.o \
-	   $(BUILD_DIR)/kmalloc.o $(BUILD_DIR)/mem_pool.o
+	   $(BUILD_DIR)/kmalloc.o $(BUILD_DIR)/mem_pool.o $(BUILD_DIR)/stack.o
 
 all: $(BUILD_DIR)/kernel.elf
 

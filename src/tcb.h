@@ -16,10 +16,13 @@ typedef struct tcb {
     unsigned int id;
     task_state_t state;
 
-    unsigned char *stack_base;
+    unsigned char *stack_base;   // lowest address
     unsigned int stack_size;
 
-    struct tcb *next;   // for ready / blocked lists
+    unsigned int stack_high_water; // bytes used
+
+    struct tcb *next;
 } tcb_t;
+
 
 #endif
